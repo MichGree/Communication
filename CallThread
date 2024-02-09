@@ -1,0 +1,64 @@
+#include "windows.h"
+#include <stdio.h>
+#include "buffer.h" 
+
+typedef struct
+{
+	Cyc_Buffer* pBuffer_cyc;
+
+}params_t;
+
+
+params_t Thread_params;
+
+
+DWORD WINAPI func(LPVOID lpParam)
+{
+	params_t  *pth_prams= (params_t*)lpParam;
+	Cyc_Buffer* ptrBuf = pth_prams->pBuffer_cyc;
+
+	int r, k1;
+
+	while (1)
+	{
+		header_t temp;
+
+		r=ptrBuf->Get_Consumer(&temp);
+		if (r == 1)
+			continue;
+		else if (r == 0)
+		{
+			int* p_data = (int*)temp.pt_message_data;
+
+			k1 = *p_data;
+			int nn = temp.actual_mesage_data_size / sizeof(int) - 1;
+			int result[200];
+			printf("\nThe rusults are: ");
+			for (int i = 0; i < nn; i++)
+			{
+				p_data++;
+				result[i] = *p_data * k1;
+				printf("%d ", result[i]);
+			}
+	
+			
+			printf("\n----------------------------- New messege arrived.\n");
+			ptrBuf->Advance_Consumer();
+		}
+
+		
+	}
+
+}
+
+int CallThread(Cyc_Buffer *pBuffer_cyc)
+{
+	DWORD dwThreadId;
+
+	Thread_params.pBuffer_cyc = pBuffer_cyc;
+	
+	HANDLE arS = CreateThread(0, 0, func, (LPVOID)&Thread_params, 0, &dwThreadId);
+
+	return 0;
+
+}
