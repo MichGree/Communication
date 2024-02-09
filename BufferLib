@@ -1,0 +1,40 @@
+#pragma once
+
+#define MAX_MUUMBER_OF_MESSAGES 30
+#define MAX_MESSAGE_DATA_SIZE 1000
+
+typedef struct
+{
+
+    char *pt_message_data;
+    int offset_mesage_data;
+    int max_data_size;
+    int actual_mesage_data_size;
+
+}header_t;
+
+class Cyc_Buffer
+{
+public:
+     Cyc_Buffer();
+     ~Cyc_Buffer();
+
+    int Get_Producer(int requsted_mesage_data_size, header_t* head_p);
+    int Advance_Producer();
+    int Get_Consumer(header_t* head_p);
+    int Advance_Consumer();
+    
+
+
+
+private:
+    char messege[MAX_MUUMBER_OF_MESSAGES* MAX_MESSAGE_DATA_SIZE];
+    header_t head[MAX_MUUMBER_OF_MESSAGES];
+    
+    char* p_producer, *p_consumer;
+    int p_i, c_i;
+    int N_messages;
+
+
+
+};
