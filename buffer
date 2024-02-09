@@ -1,0 +1,141 @@
+
+
+#include "windows.h"
+#include <stdio.h>
+#include "buffer.h" 
+
+CRITICAL_SECTION CriticalSection;
+
+
+//------------------------------------------------------------//
+
+
+
+Cyc_Buffer::Cyc_Buffer()
+{
+	//Init 
+	N_messages = 0;
+	p_producer = (char*)&head[0];
+	p_consumer = p_producer;
+	p_i = 0;
+	c_i = p_i;
+
+	//Ctitical section init
+	if (!InitializeCriticalSectionAndSpinCount(&CriticalSection, 0x00000400))
+	{
+		printf("Critical section init fail \n");
+	}
+
+}
+
+
+
+//------------------------------------------------------------//
+
+
+
+Cyc_Buffer::~Cyc_Buffer()
+{
+	DeleteCriticalSection(&CriticalSection);
+
+}
+
+
+
+//--------------------------------------------------------//
+
+
+
+int Cyc_Buffer::Get_Producer(int requsted_mesage_data_size, header_t *head_p)
+{
+	EnterCriticalSection(&CriticalSection);
+
+	if (((p_i + 1) % MAX_MUUMBER_OF_MESSAGES == c_i)  && (N_messages == MAX_MUUMBER_OF_MESSAGES - 1))
+	{
+		LeaveCriticalSection(&CriticalSection);
+		return 1;
+	}
+	else
+	{
+		head[p_i].max_data_size = MAX_MESSAGE_DATA_SIZE;
+		head[p_i].actual_mesage_data_size = requsted_mesage_data_size;
+		head[p_i].offset_mesage_data = p_i * head[p_i].max_data_size;
+		head[p_i].pt_message_data = (messege + p_i * head[p_i].max_data_size);
+
+		memcpy(head_p,  &head[p_i],sizeof(header_t));
+
+		LeaveCriticalSection(&CriticalSection);
+		return 0;
+	}
+	
+	
+}
+
+
+
+//----------------------------------------------//
+
+
+
+int Cyc_Buffer::Advance_Producer()
+{
+	EnterCriticalSection(&CriticalSection);
+
+	p_i++;
+	N_messages++;
+	if (p_i == MAX_MUUMBER_OF_MESSAGES)
+		p_i = 0;
+
+	LeaveCriticalSection(&CriticalSection);
+	return 0;
+}
+
+
+
+//---------------------------------------------//
+
+
+
+int Cyc_Buffer::Get_Consumer(header_t *head_p)
+{
+	EnterCriticalSection(&CriticalSection);
+
+	if ((p_i == c_i) && (N_messages == 0))
+	{
+		LeaveCriticalSection(&CriticalSection);
+		return 1;
+	}
+	else
+	{
+		memcpy(head_p, &head[c_i], sizeof(header_t));;
+
+		LeaveCriticalSection(&CriticalSection);
+		return 0;
+	}
+
+}
+
+
+
+//--------------------------------------------//
+
+
+
+int Cyc_Buffer::Advance_Consumer()
+{
+	EnterCriticalSection(&CriticalSection);
+
+	c_i++;
+	N_messages--;
+	if (c_i == MAX_MUUMBER_OF_MESSAGES)
+		c_i = 0;
+
+	LeaveCriticalSection(&CriticalSection);
+	return 0;
+}
+
+
+
+//--------------------------------------//
+
+
