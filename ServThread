@@ -1,0 +1,214 @@
+#include "stdafx.h"
+#include "serv.h"
+#include "buffer.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#endif
+
+#include <stdio.h>
+#include "winsock2.h"
+
+
+// The one and only application object
+
+//CWinApp theApp;
+
+
+
+using namespace std;
+
+
+
+
+typedef struct
+{
+    Cyc_Buffer* pBuffer_cyc;
+
+}params_t;
+
+
+params_t Buf_cyc;
+
+
+
+
+DWORD WINAPI ServThread(LPVOID lpParam)
+{
+
+    params_t* pth_prams = (params_t*)lpParam;
+    Cyc_Buffer* ptrBuf = pth_prams->pBuffer_cyc;
+
+
+    // Initialize Winsock.
+    WSADATA wsaData;
+    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != NO_ERROR)
+        printf("Error at WSAStartup()\n");
+
+    //----------------------
+    // Create a SOCKET for listening for
+    // incoming connection requests.
+    SOCKET ListenSocket;
+    ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (ListenSocket == INVALID_SOCKET) {
+        printf("Error at socket(): %ld\n", WSAGetLastError());
+        WSACleanup();
+        return 0;
+    }
+
+    //non blocking
+    int iMode = 1; //non block, 0 -block
+    ioctlsocket(ListenSocket, FIONBIO, (u_long FAR*) & iMode);
+
+
+    //----------------------
+    // The sockaddr_in structure specifies the address family,
+    // IP address, and port for the socket that is being bound.
+    sockaddr_in service;
+    service.sin_family = AF_INET;
+    service.sin_addr.s_addr = inet_addr("10.100.102.38");//"127.0.0.1");
+    service.sin_port = htons(27015);
+
+    if (bind(ListenSocket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR)
+    {
+        printf("bind() failed.\n");
+        closesocket(ListenSocket);
+        return 0;
+    }
+
+    //----------------------
+    // Listen for incoming connection requests.
+    // on the created socket
+    if (listen(ListenSocket, 1) == SOCKET_ERROR)
+        printf("Error listening on socket.\n");
+
+    //----------------------
+    // Create a SOCKET for accepting incoming requests.
+    SOCKET AcceptSocket;
+    printf("Waiting for client to connect...\n");
+
+    //----------------------
+    // Accept the connection.
+
+    sockaddr_in from;
+    int fromlen = sizeof(from);
+    char temp[512];
+
+
+
+    while (1) {
+        AcceptSocket = SOCKET_ERROR;
+        while (AcceptSocket == SOCKET_ERROR) {
+            AcceptSocket = accept(ListenSocket, (struct sockaddr*)&from, &fromlen);
+
+            sprintf(temp, "Your IP is %s\r\n", inet_ntoa(from.sin_addr));
+
+        }
+
+        printf("Client connected.\n");
+
+        send(AcceptSocket, temp, strlen(temp), 0);
+        cout << "Connection from " << inet_ntoa(from.sin_addr) << "\r\n";
+
+        int bytesRecv1, bytesRecv2, i;
+        char recvbuf[512];
+        int buf[200];
+
+        int h, k;
+        header_t header_cyc;
+
+
+        while (1)
+        {
+            for (i = 0;i < 1000000;i++)
+            {
+                bytesRecv1 = recv(AcceptSocket, (char*)&h, /*200*/1 * sizeof(int), 0);
+                bytesRecv2 = 0;
+                if (bytesRecv1 > 0)
+                {
+                    // bytesRecv2 = recv(AcceptSocket, (char*)&buf[1], /*200*/buf[0] * sizeof(int), 0);
+
+                    int status = ptrBuf->Get_Producer(h * sizeof(int), &header_cyc);
+                    if (status == 1)
+                    {
+                        printf(" --------- Buffer full -------------- \n");
+                        continue;
+                    }
+                    else
+                    {
+                        bytesRecv2 = recv(AcceptSocket, header_cyc.pt_message_data, /*200*/h * sizeof(int), 0);
+                        
+                        ptrBuf->Advance_Producer();
+
+                    }
+                }
+
+
+                if (bytesRecv1 + bytesRecv2 > 0)
+                {
+                    printf("Message size: %ld\n", h);
+                    break;
+                }
+            }
+
+
+            printf("Bytes Res: %ld\n", bytesRecv1 + bytesRecv2);
+
+            if (bytesRecv1 > 0)
+            {
+                //recvbuf[bytesRecv] = '\0';
+                printf("Answer From client:   ");
+                for (int c = 0;c < h;c++)
+                {
+                    printf("%d ", *((int*)header_cyc.pt_message_data + c));
+                }
+                printf("\n");
+            }
+
+            if (bytesRecv1 == 0 || bytesRecv1 == WSAECONNRESET)
+            {
+                printf("Connection Closed.\n");
+                break;
+            }
+
+        }
+
+
+        //   closesocket(AcceptSocket);
+
+
+        ListenSocket = AcceptSocket;
+        break;
+    }
+
+
+
+
+
+    WSACleanup();
+    return 0;
+
+
+}
+
+
+
+
+
+
+
+
+int CallServ(Cyc_Buffer* pBuffer_cyc1)
+{
+
+    DWORD dwThreadId;
+
+    Buf_cyc.pBuffer_cyc = pBuffer_cyc1;
+
+    HANDLE st = CreateThread(0, 0, ServThread, (LPVOID)&Buf_cyc, 0, &dwThreadId);
+
+    return 0;
+
+}
+
